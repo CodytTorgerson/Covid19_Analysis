@@ -85,8 +85,7 @@ def query_country_data(country):
     except Exception as e:
         print(e)
 
-class 
-:
+class sqldatabase:
     """ Class which fills the SQlite database with data
     Args:
         Countries: list of strings which are country names
