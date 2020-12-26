@@ -1,3 +1,8 @@
+#Description:   Python job script used to actualize an SQL databases data with the newest avialable COVID data.
+#               This script checks which date data was last added to the table.  All data between the last added date and the date the job runs will be added to the SQL database
+# Author:       Cody Torgerson           
+
+
 import os, requests, json, datetime 
 
 ## pip specific modules
@@ -8,31 +13,46 @@ import sqlite3
 import db_connector
 
 
+
 class Actualizesqldatabase:
     """ Class which fills the SQlite database with data
     Args:
         Countries: list of strings which are country names
     """
-    def df_to_sql(self):
+    def df_to_sql(self,country_ISO):
+        #Processes one countries data for a specific timerange
         try:
             #Collect List of States
             r = requests.get('https://covid-api.com/api/reports?date=2020-12-01&iso=DEU')
             jsonify = r.json()
+            
             df = pd.DataFrame(jsonify['data'])
+
             #Because of nested json the regions column needs to be refactored
             regiondf = pd.DataFrame(df['region'])
             x = json.loads(regiondf.to_json())
             states = pd.DataFrame(x['region'])
             states = states.transpose()
-            for rows in states['province']:
-                r = requests.get(f'https://covid-api.com/api/reports?date=2020-12-01&iso=DEU&region_province={rows}')
-                jsonify = r.json()
-                df = pd.DataFrame(jsonify['data'])
-                #TODO: Cleanup data so that the state and country are columns
-                df.drop(columns=['region'])
-                print(df)
-                print(rows)
-
+            #remove column filled with nested JSON metadata
+            Maindataframe = pd.DataFrame()
+            for date in  self.daterange(datetime.date(2020,12,1),datetime.date(2020,12,5)):
+                date = date.strftime("%Y-%m-%d")
+                for rows in states['province']:
+                    r = requests.get(f'https://covid-api.com/api/reports?date={date}&iso=DEU&region_province={rows}')
+                    jsonify = r.json()
+                    df = pd.DataFrame(jsonify['data'])
+                    df = df.drop(columns=['region'])
+                    df['State'] = rows
+                    #TODO: Change the coutnry name so its updated by the ISO or read in
+                    df['Country'] = "Germany"
+                    #check if the dataframe has data in it or not
+                    #If not then append the dataframe df to the Maindataframe
+                    if Maindataframe.size == 0:
+                        Maindataframe = df
+                    else:
+                        Maindataframe = Maindataframe.append(df, ignore_index=True)
+                    
+                    #TODO: Cleanup data so that the state and country are columns
 
 
             engine, meta = db_connector.db_engine()
@@ -41,6 +61,23 @@ class Actualizesqldatabase:
         except Exception as e:
             print(e)
 
+
+
+    def find_country_ISO(Country):
+        #TODO: cache this array
+        r = requests.get('https://covid-api.com/api/regions')
+        jsonify = r.json()
+
+        df = pd.DataFrame(jsonify['data'])
+        try:
+            index = df.loc[df['name']==Country]     
+            iso_code = index['iso'].values[0] 
+            return iso_code 
+        except Exception as e:
+            print('Country not found')
+            return e
+
+    
     def select_data_by_country(self, country_name: str):
         """ Queries the Covid19 SQLite database by country name.
 
@@ -95,6 +132,26 @@ class Actualizesqldatabase:
             print("Generate New Cases Data Failed")
             print(e)
                        
+
+
+    def daterange(start_date, end_date):
+        """Returns a list of dates in YYYY-MM-DD format
+        From: https://stackoverflow.com/questions/1060279/iterating-through-a-range-of-dates-in-python
+
+        Args:
+           start_date: Datetime date string in YYYY-MM-DD format. Represents first day of list
+           end_date: Datetime date string in YYYY-MM-DD format. Represents last day of list
+          
+        Returns:
+           Returns a list of dates in YYYY-MM-DD format that represent the desired range of dates from start to end.
+        
+        Example:
+        for single_date in daterange(start_date, end_date):
+             print(single_date.strftime("%Y-%m-%d"))
+        """
+        for n in range(int((end_date - start_date).days)):
+            yield start_date + datetime.timedelta(n)
+
     def generate_change_in_cases_added(self, dataframe):
         """Takes the derivative of New cases per day and saves it in a dataframe
 
@@ -138,23 +195,8 @@ class Actualizesqldatabase:
             print(e)
 
 
-    def daterange(start_date, end_date):
-        """Returns a list of dates in YYYY-MM-DD format
-        From: https://stackoverflow.com/questions/1060279/iterating-through-a-range-of-dates-in-python
 
-        Args:
-           start_date: Datetime date string in YYYY-MM-DD format. Represents first day of list
-           end_date: Datetime date string in YYYY-MM-DD format. Represents last day of list
-          
-        Returns:
-           Returns a list of dates in YYYY-MM-DD format that represent the desired range of dates from start to end.
-        
-        Example:
-        for single_date in daterange(start_date, end_date):
-             print(single_date.strftime("%Y-%m-%d"))
-        """
-        for n in range(int((end_date - start_date).days)):
-            yield start_date + datetime.timedelta(n)
+
 
     def merge_newcases_change_in_cases_dataframes(self, dataframe_confirmed):
         """ Combines dataframes containing new cases, and the change in new cases, and inserts the dataframe to the SQLite database

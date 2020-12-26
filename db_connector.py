@@ -58,9 +58,9 @@ def covid_19_basic_sql_insert_sqlalchemy(table, engine, dataframe):
         
     """
     ins = table.insert().values(
-        ObservationDate = dataframe["ObservationDate"],
-        Province_State = dataframe["DateTime"],
-        Country_Region= dataframe["Country_Region"],
+        Date = dataframe["Date"],
+        State = dataframe["Province/State"],
+        Country= dataframe["Country"],
         Last_Update = dataframe["Last_Update"],
         Confirmed = dataframe["Confirmed"],
         Deaths = dataframe["Deaths"],
@@ -79,7 +79,7 @@ def Daily_Change_sql_insert_sqlalchemy(table, engine, dataframe):
     """
     ins = table.insert().values(
         ObservationDate = dataframe["ObservationDate"],
-        Province_State = dataframe["DateTime"],
+        Province_State = dataframe["Province/State"],
         Country_Region= dataframe["Country_Region"],
         Confirmed = dataframe["Confirmed"],
         Deaths = dataframe["Deaths"],
@@ -101,7 +101,7 @@ def covid19basic_table_object(meta):
     """
     covid_table = Table('covid19basic', meta,
             Column('SNo', Integer, primary_key=True),
-            Column('ObservationDate',String),
+            Column('Date',String),
             Column('Province/State', DateTime),
             Column('Country/Region', String),
             Column('Last Update', DateTime),
